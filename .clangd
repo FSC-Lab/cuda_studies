@@ -1,0 +1,9 @@
+CompileFlags:
+  Add:
+    - --no-cuda-version-check
+    - -Wno-unknown-warning-option
+  Remove:
+    - -forward-unknown-to-host-compiler
+    - --generate-code*
+    - -rdc*
+    - -Xcompiler*
