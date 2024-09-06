@@ -10,7 +10,7 @@
 
 * ninja-build
 
-    Ninja is known to be faster than Unix make. 
+    Ninja is known to be faster than Unix make.
     Install with `sudo apt-get install ninja-build`
 
 * ccache

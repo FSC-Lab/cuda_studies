@@ -49,11 +49,7 @@ struct SimulationResult {
  * system, each consisting of columnwise slices of controls for each timestep
  * @param dt An array containing the timesteps for each timestep. This is a
  * single array, common to every system
- * @param ts An array to be filled with the time points at which each state is
- * computed. This is a single array, common to every system
- * @param xs A vector of arrays to be filled with computed state over all
- * timestpes for each system
- * @param method
+ * @param method A enumerator toggling usage of Euler or RK4 methods
  * @return A SimulationResult structure containing the output time and state
  * trajectory and an error code
  */

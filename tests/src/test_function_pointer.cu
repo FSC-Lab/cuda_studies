@@ -1,8 +1,28 @@
-#include <gtest/gtest.h>
-#include <thrust/device_vector.h>
-#include <thrust/host_vector.h>
+// Copyright © 2024 ADR Team
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+// OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+// OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include <random>
+
+#include "gtest/gtest.h"
+#include "thrust/device_vector.h"
+#include "thrust/host_vector.h"
 
 using BinaryOperation = void (*)(uint, double const*, double const*, double*);
 
@@ -28,7 +48,7 @@ __device__ BinaryOperation p_div = Div;
 __global__ void BinaryOperationKernel(BinaryOperation op, uint num_samples,
                                       uint len_x, double* lhs, double* rhs,
                                       double* res) {
-  uint i = blockIdx.x * blockDim.x + threadIdx.x;
+  ulong i = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (i >= num_samples) {
     return;
@@ -62,22 +82,21 @@ thrust::host_vector<double> InvokeBinaryOperation(
 }
 
 struct TestFunctionPointer : public testing::Test {
-  uint num_samples = 100;
-  uint len_x = 4;
+  ulong num_samples = 100;
+  ulong len_x = 4;
 
   std::random_device dev;
   std::mt19937 rng{dev()};
   std::uniform_real_distribution<> dist{10.0, 100.0};
-  std::function<double()> generate_fn = std::bind(dist, std::ref(rng));
+  double Generate() { return dist(rng); }
 
   thrust::host_vector<double> lhs;
   thrust::host_vector<double> rhs;
   thrust::host_vector<double> res;
 
-  TestFunctionPointer()
-      : ::testing::Test(), lhs(num_samples * len_x), rhs(num_samples * len_x) {
-    thrust::generate(lhs.begin(), lhs.end(), generate_fn);
-    thrust::generate(rhs.begin(), rhs.end(), generate_fn);
+  TestFunctionPointer() : lhs(num_samples * len_x), rhs(num_samples * len_x) {
+    thrust::generate(lhs.begin(), lhs.end(), [this] { return Generate(); });
+    thrust::generate(rhs.begin(), rhs.end(), [this] { return Generate(); });
   }
 };
 
