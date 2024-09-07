@@ -28,6 +28,11 @@ set_target_properties(ensemble_simulation PROPERTIES CUDA_SEPARABLE_COMPILATION
                                                      ON)
 target_link_libraries(ensemble_simulation PUBLIC Eigen3::Eigen common)
 
+add_library(cpu_ensemble_simulation src/cpu/ensemble_simulation.cpp)
+target_compile_features(cpu_ensemble_simulation PUBLIC cxx_std_17)
+target_include_directories(cpu_ensemble_simulation PUBLIC include)
+target_link_libraries(cpu_ensemble_simulation PUBLIC Eigen3::Eigen)
+
 include(CTest)
 if(BUILD_TESTING)
   add_subdirectory(tests)
