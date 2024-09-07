@@ -18,3 +18,11 @@ target_compile_options(
                          -Wno-cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE GTest::gtest GTest::gtest_main)
 gtest_discover_tests(${PROJECT_NAME})
+
+add_executable(${PROJECT_NAME}_our_api src/test_simulation.cu)
+target_link_libraries(
+  ${PROJECT_NAME}_our_api PRIVATE ensemble_simulation cpu_ensemble_simulation
+                                  GTest::gtest GTest::gtest_main)
+set_target_properties(${PROJECT_NAME}_our_api
+                      PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+gtest_discover_tests(${PROJECT_NAME}_our_api)
