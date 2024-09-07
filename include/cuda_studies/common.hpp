@@ -49,8 +49,10 @@ enum class SimulationErrc {
 };
 }  // namespace fsc
 
+namespace std {
 template <>
-struct ::std::is_error_code_enum<::fsc::SimulationErrc> : true_type {};
+struct is_error_code_enum<::fsc::SimulationErrc> : true_type {};
+}  // namespace std
 
 namespace fsc {
 
