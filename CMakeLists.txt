@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.26.0)
 project(fsc_cuda_studies LANGUAGES CXX CUDA)
 
 option(BUILD_EXAMPLES "Toggles building examples" ON)
+option(BUILD_BENCHMARKS "Toggles building benchmarks" ON)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -40,4 +41,8 @@ endif()
 
 if(BUILD_EXAMPLES)
   add_subdirectory(examples)
+endif()
+
+if(BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
 endif()
