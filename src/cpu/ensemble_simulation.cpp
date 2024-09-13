@@ -21,6 +21,7 @@
 #include "cuda_studies/cpu/ensemble_simulation.hpp"
 
 #include <cstdint>
+#include <utility>
 
 #include "Eigen/Core"  // IWYU pragma: export
 #include "cuda_studies/common.hpp"
@@ -265,4 +266,70 @@ SimulationResult SimulateDynamicalSystemEnsemble(
 
   return res;
 }
+
+struct DynamicalSystemEnsemble::Impl {
+  Impl(DynamicalSystem s, Method m) : p_system(std::move(s)), method(m) {}
+
+  [[nodiscard]] SimulationResult simulate(double t0, const Eigen::VectorXd& x0,
+                                          const std::vector<Eigen::MatrixXd>& u,
+                                          const Eigen::VectorXd& dt) const {
+    SimulationResult res;
+    const int64_t len_x = x0.size();
+
+    GUARD(len_x == 0, res, SimulationErrc::kDimensionsInvalid);
+
+    GUARD(u.empty(), res, SimulationErrc::kNonStarting);
+    const auto num_samples = static_cast<int64_t>(u.size());
+
+    // NOTE(Hs293Go): Individual Eigen Matrices are column major, thus control
+    // slices are stacked by column
+    const auto& u0 = u.front();
+    GUARD(u0.size() == 0, res, SimulationErrc::kNonStarting);
+
+    const int64_t len_u = u0.rows();
+    const int64_t num_steps = u0.cols();
+
+    // Ensure all samples share common # rows (dimension) and # cols (trajectory
+    // length)
+    const bool has_inhomogeneous_sample =
+        std::any_of(u.cbegin(), u.cend(), [len_u, num_steps](auto&& it) {
+          return it.rows() != len_u || it.cols() != num_steps;
+        });
+    GUARD(has_inhomogeneous_sample, res,
+          SimulationErrc::kDimensionsInconsistent);
+
+    GUARD(dt.size() != num_steps, res, SimulationErrc::kTimestepsInconsistent);
+
+    GUARD((dt.array() <= 0.0).any(), res, SimulationErrc::kTimestepInvalid);
+
+    // Copy device function pointer to host side
+    res.t.resize(num_steps);
+    res.x = std::vector<Eigen::MatrixXd>(num_samples,
+                                         Eigen::MatrixXd(len_x, num_steps));
+    for (int64_t i = 0; i < num_samples; ++i) {
+      const auto& us = u[i];
+      GUARD(!SimulateDynamicalSystem(p_system, t0, x0, us, dt, res.t, res.x[i],
+                                     method),
+            res, SimulationErrc::kUserAsked);
+    }
+
+    return res;
+  }
+
+  DynamicalSystem p_system;
+  Method method;
+};
+
+DynamicalSystemEnsemble::DynamicalSystemEnsemble(const DynamicalSystem& system,
+                                                 Method method)
+    : pimpl_(std::make_unique<Impl>(system, method)) {}
+
+DynamicalSystemEnsemble::~DynamicalSystemEnsemble() = default;
+
+SimulationResult DynamicalSystemEnsemble::simulate(
+    double t0, const Eigen::VectorXd& x0, const std::vector<Eigen::MatrixXd>& u,
+    const Eigen::VectorXd& dt) {
+  return pimpl_->simulate(t0, x0, u, dt);
+}
+
 }  // namespace fsc::cpu

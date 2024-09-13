@@ -102,4 +102,15 @@ BENCHMARK_F(BenchmarkSimulation, StatefulGPUEnsembleSimulation)
     benchmark::DoNotOptimize(res);
   }
 }
+
+BENCHMARK_F(BenchmarkSimulation, StatefulCPUEnsembleSimulation)
+(benchmark::State& state) {
+  fsc::cpu::SimulationResult res;
+  fsc::cpu::DynamicalSystemEnsemble systems(cpu::unicycle,
+                                            fsc::cpu::Method::kRK4);
+  for ([[maybe_unused]] auto&& _ : state) {
+    res = systems.simulate(0.0, x0, us, dt);
+    benchmark::DoNotOptimize(res);
+  }
+}
 // NOLINTEND(misc-use-anonymous-namespace)

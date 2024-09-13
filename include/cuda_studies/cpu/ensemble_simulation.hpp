@@ -22,6 +22,7 @@
 #define CUDA_STUDIES_CPU_ENSEMBLE_SIMULATION_HPP_
 
 #include <functional>
+#include <memory>
 #include <vector>
 
 #include "Eigen/Dense"
@@ -59,6 +60,20 @@ SimulationResult SimulateDynamicalSystemEnsemble(
     const std::vector<Eigen::MatrixXd>& u, const Eigen::VectorXd& dt,
     Method method);
 
+class DynamicalSystemEnsemble {
+ public:
+  DynamicalSystemEnsemble(const DynamicalSystem& system, Method method);
+
+  ~DynamicalSystemEnsemble();
+
+  SimulationResult simulate(double t0, const Eigen::VectorXd& x0,
+                            const std::vector<Eigen::MatrixXd>& u,
+                            const Eigen::VectorXd& dt);
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> pimpl_;
+};
 }  // namespace fsc::cpu
 
 #endif  // CUDA_STUDIES_CPU_ENSEMBLE_SIMULATION_HPP_
