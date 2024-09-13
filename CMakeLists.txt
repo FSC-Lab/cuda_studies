@@ -10,7 +10,7 @@ FetchContent_Declare(
   Eigen3
   GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
   GIT_TAG 3.4.0
-  FIND_PACKAGE_ARGS NAMES Eigen3 CONFIG 3.4.0)
+  SYSTEM FIND_PACKAGE_ARGS NAMES Eigen3 CONFIG 3.4.0)
 
 FetchContent_MakeAvailable(Eigen3)
 
