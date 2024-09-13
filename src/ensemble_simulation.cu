@@ -333,4 +333,133 @@ SimulationResult SimulateDynamicalSystemEnsemble(
 
   return res;
 }
+
+struct DynamicalSystemEnsemble::Impl {
+  Impl(const DynamicalSystem& system, Method method) : method(method) {
+    CUDA_CHECK(
+        cudaMemcpyFromSymbol(&p_system, system, sizeof(DynamicalSystem)));
+  }
+
+  SimulationResult simulate(double t0, const Eigen::VectorXd& x0,
+                            const std::vector<Eigen::MatrixXd>& u,
+                            const Eigen::VectorXd& dt) {
+    SimulationResult res;
+    const int64_t len_x = x0.size();
+
+    GUARD(len_x == 0, res, SimulationErrc::kDimensionsInvalid);
+
+    // Allocate initial conditions in GPU memory
+    // =========================================
+    dev_x0.assign(x0.data(), x0.data() + len_x);
+
+    // Validate input control trajectory
+    // =================================
+    GUARD(u.empty(), res, SimulationErrc::kNonStarting);
+    const auto num_samples = static_cast<int64_t>(u.size());
+
+    // NOTE(Hs293Go): Individual Eigen Matrices are column major, thus control
+    // slices are stacked by column
+    const auto& u0 = u.front();
+    GUARD(u0.size() == 0, res, SimulationErrc::kNonStarting);
+
+    const int64_t len_u = u0.rows();
+    const int64_t num_steps = u0.cols();
+
+    // Ensure all samples share common # rows (dimension) and # cols (trajectory
+    // length)
+    const bool has_inhomogeneous_sample =
+        std::any_of(u.cbegin(), u.cend(), [len_u, num_steps](auto&& it) {
+          return it.rows() != len_u || it.cols() != num_steps;
+        });
+    GUARD(has_inhomogeneous_sample, res,
+          SimulationErrc::kDimensionsInconsistent);
+
+    // Allocate input control trajectory in GPU memory
+    // ===============================================
+    const int64_t u_sample_size =
+        len_u * num_steps;  // Size of each input sample
+    dev_us.resize(num_samples * u_sample_size);
+
+    // Copy input control trajectory to GPU memory
+    // ===========================================
+    auto it_u = u.cbegin();  // Source
+    const auto sent_u = u.cend();
+    auto it_dev_u = dev_us.begin();
+    for (; it_u != sent_u; ++it_u, it_dev_u += u_sample_size) {
+      thrust::copy_n(it_u->data(), u_sample_size, it_dev_u);
+    }
+
+    GUARD(dt.size() != num_steps, res, SimulationErrc::kTimestepsInconsistent);
+
+    GUARD((dt.array() <= 0.0).any(), res, SimulationErrc::kTimestepInvalid);
+
+    dev_dt.assign(dt.data(), dt.data() + dt.size());
+
+    // Allocate output state trajectory in GPU memory
+    // ==============================================
+    dev_ts.resize(num_steps);
+    const int64_t x_sample_size = len_x * num_steps;
+    dev_xs.resize(num_samples * x_sample_size);
+
+    // Invoke cuda kernel
+    // ==================
+    constexpr int64_t kBlockSize = 256;
+    const int64_t threads_per_block =
+        std::max(1L, (num_samples + kBlockSize - 1) / kBlockSize);
+
+    dev_success.resize(num_samples, false);
+
+    SimulateDynamicalSystemEnsembleKernel<<<threads_per_block, kBlockSize>>>(
+        p_system, t0, dev_x0.data().get(), static_cast<int64_t>(dev_x0.size()),
+        dev_us.data().get(), num_samples, num_steps, len_u, dev_dt.data().get(),
+        dev_ts.data().get(), dev_xs.data().get(), dev_success.data().get(),
+        method);
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    const bool has_unsuccessful = std::any_of(
+        dev_success.cbegin(), dev_success.cend(), [](auto it) { return !it; });
+
+    GUARD(has_unsuccessful, res, SimulationErrc::kUserAsked);
+
+    // Populate output structure
+    // =========================
+    res.t = Eigen::VectorXd(num_steps);
+    res.x = std::vector<Eigen::MatrixXd>(num_samples,
+                                         Eigen::MatrixXd(len_x, num_steps));
+    res.errc = SimulationErrc::kSuccess;
+    thrust::copy(dev_ts.cbegin(), dev_ts.cend(), res.t.data());
+
+    auto it_x = res.x.begin();
+    auto sent_x = res.x.end();
+    auto it_dev_x = dev_xs.cbegin();
+    for (; it_x != sent_x; ++it_x, it_dev_x += x_sample_size) {
+      thrust::copy_n(it_dev_x, x_sample_size, it_x->data());
+    }
+
+    return res;
+  }
+
+  DynamicalSystem p_system;
+  Method method;
+
+  thrust::device_vector<double> dev_x0;
+  thrust::device_vector<double> dev_us;
+  thrust::device_vector<double> dev_dt;
+  thrust::device_vector<bool> dev_success;
+  thrust::device_vector<double> dev_ts;
+  thrust::device_vector<double> dev_xs;
+};
+
+DynamicalSystemEnsemble::DynamicalSystemEnsemble(const DynamicalSystem& system,
+                                                 Method method)
+    : pimpl_(std::make_unique<Impl>(system, method)) {}
+
+DynamicalSystemEnsemble::~DynamicalSystemEnsemble() = default;
+
+SimulationResult DynamicalSystemEnsemble::simulate(
+    double t0, const Eigen::VectorXd& x0, const std::vector<Eigen::MatrixXd>& u,
+    const Eigen::VectorXd& dt) {
+  return pimpl_->simulate(t0, x0, u, dt);
+}
+
 }  // namespace fsc

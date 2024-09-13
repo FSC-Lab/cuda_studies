@@ -92,4 +92,14 @@ BENCHMARK_F(BenchmarkSimulation, CPUEnsembleSimulation)
     benchmark::DoNotOptimize(res);
   }
 }
+
+BENCHMARK_F(BenchmarkSimulation, StatefulGPUEnsembleSimulation)
+(benchmark::State& state) {
+  fsc::SimulationResult res;
+  fsc::DynamicalSystemEnsemble systems(gpu::unicycle, fsc::Method::kRK4);
+  for ([[maybe_unused]] auto&& _ : state) {
+    res = systems.simulate(0.0, x0, us, dt);
+    benchmark::DoNotOptimize(res);
+  }
+}
 // NOLINTEND(misc-use-anonymous-namespace)

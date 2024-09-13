@@ -21,6 +21,7 @@
 #ifndef CUDA_STUDIES_ENSEMBLE_SIMULATION_HPP_
 #define CUDA_STUDIES_ENSEMBLE_SIMULATION_HPP_
 
+#include <memory>
 #include <system_error>
 #include <vector>
 
@@ -57,6 +58,21 @@ SimulationResult SimulateDynamicalSystemEnsemble(
     const DynamicalSystem& system, double t0, const Eigen::VectorXd& x0,
     const std::vector<Eigen::MatrixXd>& u, const Eigen::VectorXd& dt,
     Method method);
+
+class DynamicalSystemEnsemble {
+ public:
+  DynamicalSystemEnsemble(const DynamicalSystem& system, Method method);
+
+  ~DynamicalSystemEnsemble();
+
+  SimulationResult simulate(double t0, const Eigen::VectorXd& x0,
+                            const std::vector<Eigen::MatrixXd>& u,
+                            const Eigen::VectorXd& dt);
+
+ private:
+  struct Impl;
+  std::unique_ptr<Impl> pimpl_;
+};
 
 }  // namespace fsc
 #endif  // CUDA_STUDIES_ENSEMBLE_SIMULATION_HPP_
