@@ -30,3 +30,7 @@ target_link_libraries(
 set_target_properties(${PROJECT_NAME}_our_api
                       PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 gtest_discover_tests(${PROJECT_NAME}_our_api)
+
+add_executable(test_rng)
+target_sources(test_rng PRIVATE src/test_rng.cu)
+target_link_libraries(test_rng PRIVATE Eigen3::Eigen)
