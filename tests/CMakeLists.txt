@@ -1,26 +1,38 @@
 project(${CMAKE_PROJECT_NAME}_tests)
 
 include(FetchContent)
-
+set(BOOST_ENABLE_CMAKE ON)
+set(BOOST_INCLUDE_LIBRARIES math)
 FetchContent_Declare(
   GTest
   GIT_REPOSITORY https://github.com/google/googletest.git
   GIT_TAG v1.12.0
   SYSTEM FIND_PACKAGE_ARGS NAMES GTest CONFIG 1.12.0)
 
-FetchContent_MakeAvailable(GTest)
+FetchContent_Declare(
+  Boost
+  URL https://github.com/boostorg/boost/releases/download/boost-1.84.0/boost-1.84.0.7z # downloading a zip release speeds up the download
+  USES_TERMINAL_DOWNLOAD TRUE
+  GIT_PROGRESS TRUE
+  DOWNLOAD_NO_EXTRACT FALSE
+  SYSTEM FIND_PACKAGE_ARGS NAMES Boost CONFIG 1.84.0
+)
+
+FetchContent_MakeAvailable(GTest Boost)
+
 
 include(GoogleTest)
+
 add_executable(${PROJECT_NAME})
 target_sources(
   ${PROJECT_NAME} PRIVATE src/test_basic_kernel_launch.cu
-                          src/test_function_pointer.cu src/test_reduction.cu)
+                          src/test_function_pointer.cu src/test_reduction.cu src/test_rng.cu)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17)
 target_compile_options(
   ${PROJECT_NAME} PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:-diag-suppress 20012,20011>
                          -Wno-cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE GTest::gtest GTest::gtest_main
-                                              Eigen3::Eigen)
+                                              Eigen3::Eigen Boost::math)
 gtest_discover_tests(${PROJECT_NAME})
 
 add_executable(${PROJECT_NAME}_our_api src/test_simulation.cu)
@@ -31,6 +43,3 @@ set_target_properties(${PROJECT_NAME}_our_api
                       PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 gtest_discover_tests(${PROJECT_NAME}_our_api)
 
-add_executable(test_rng)
-target_sources(test_rng PRIVATE src/test_rng.cu)
-target_link_libraries(test_rng PRIVATE Eigen3::Eigen)
