@@ -1,6 +1,7 @@
 #include <random>
 
 #include "Eigen/Dense"
+#define BOOST_NO_CXX17_HDR_EXECUTION 1
 #include "boost/math/statistics/anderson_darling.hpp"
 #include "curand_kernel.h"
 #include "gtest/gtest.h"
