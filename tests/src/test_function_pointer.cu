@@ -20,6 +20,7 @@
 
 #include <random>
 
+#include "Eigen/Dense"
 #include "gtest/gtest.h"
 #include "thrust/device_vector.h"
 #include "thrust/host_vector.h"
@@ -126,6 +127,106 @@ TEST_F(TestFunctionPointer, testMulByFunctionPointer) {
 
 TEST_F(TestFunctionPointer, testDivByFunctionPointer) {
   res = InvokeBinaryOperation(p_div, lhs, num_samples, rhs);
+
+  for (int i = 0; i < num_samples * len_x; ++i) {
+    ASSERT_NEAR(res[i], lhs[i] / rhs[i], 1e-5);
+  }
+}
+
+using EigenBinaryOperation =
+    void (*)(const Eigen::Ref<const Eigen::VectorXf>& lhs,
+             const Eigen::Ref<const Eigen::VectorXf>& rhs,
+             Eigen::Ref<Eigen::VectorXf> res);
+
+#define MAKE_EIGEN_BINARY_OP(name, op)                               \
+  __device__ void name(const Eigen::Ref<const Eigen::VectorXf>& lhs, \
+                       const Eigen::Ref<const Eigen::VectorXf>& rhs, \
+                       Eigen::Ref<Eigen::VectorXf> res) {            \
+    res = lhs op rhs;                                                \
+  }
+
+MAKE_EIGEN_BINARY_OP(EigenAdd, +)
+MAKE_EIGEN_BINARY_OP(EigenSub, -)
+
+__device__ EigenBinaryOperation p_eigen_add = EigenAdd;
+__device__ EigenBinaryOperation p_eigen_sub = EigenSub;
+
+__device__ void EigenMul(const Eigen::Ref<const Eigen::VectorXf>& lhs,
+                         const Eigen::Ref<const Eigen::VectorXf>& rhs,
+                         Eigen::Ref<Eigen::VectorXf> res) {
+  res = lhs.cwiseProduct(rhs);
+}
+__device__ void EigenDiv(const Eigen::Ref<const Eigen::VectorXf>& lhs,
+                         const Eigen::Ref<const Eigen::VectorXf>& rhs,
+                         Eigen::Ref<Eigen::VectorXf> res) {
+  res = lhs.cwiseQuotient(rhs);
+}
+__device__ EigenBinaryOperation p_eigen_mul = EigenMul;
+__device__ EigenBinaryOperation p_eigen_div = EigenDiv;
+
+__global__ void BinaryOperationKernel(EigenBinaryOperation op, uint num_samples,
+                                      uint len_x, float* const lhs,
+                                      float* const rhs, float* res) {
+  const Eigen::Index i = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (i >= num_samples) {
+    return;
+  }
+  Eigen::Map<const Eigen::MatrixXf> lhs_mat(lhs, len_x, num_samples);
+  Eigen::Map<const Eigen::MatrixXf> rhs_mat(rhs, len_x, num_samples);
+  Eigen::Map<Eigen::MatrixXf> res_mat(res, len_x, num_samples);
+
+  (*op)(lhs_mat.col(i), rhs_mat.col(i), res_mat.col(i));
+}
+
+thrust::host_vector<float> InvokeEigenBinaryOperation(
+    const EigenBinaryOperation& op, const thrust::host_vector<float>& lhs,
+    uint num_samples, const thrust::host_vector<float>& rhs) {
+  EigenBinaryOperation p_op;
+  cudaMemcpyFromSymbol(&p_op, op, sizeof p_op);
+
+  thrust::device_vector<float> d_lhs(lhs.cbegin(), lhs.cend());
+  thrust::device_vector<float> d_rhs(rhs.cbegin(), rhs.cend());
+
+  thrust::device_vector<float> d_res(lhs.size());
+  const uint threads_per_block = 16;
+  const uint num_blocks =
+      (num_samples + threads_per_block - 1) / threads_per_block;
+  const uint len_x = lhs.size() / num_samples;
+  BinaryOperationKernel<<<threads_per_block, num_blocks>>>(
+      p_op, num_samples, len_x, d_lhs.data().get(), d_rhs.data().get(),
+      d_res.data().get());
+  cudaDeviceSynchronize();
+
+  return {d_res.cbegin(), d_res.cend()};
+}
+
+TEST_F(TestFunctionPointer, testEigenAddByFunctionPointer) {
+  res = InvokeEigenBinaryOperation(p_eigen_add, lhs, num_samples, rhs);
+
+  for (int i = 0; i < num_samples * len_x; ++i) {
+    ASSERT_NEAR(res[i], lhs[i] + rhs[i], 1e-5);
+  }
+}
+
+TEST_F(TestFunctionPointer, testEigenSubByFunctionPointer) {
+  res = InvokeEigenBinaryOperation(p_eigen_sub, lhs, num_samples, rhs);
+
+  for (int i = 0; i < num_samples * len_x; ++i) {
+    ASSERT_NEAR(res[i], lhs[i] - rhs[i], 1e-5);
+  }
+}
+
+TEST_F(TestFunctionPointer, testEigenMulByFunctionPointer) {
+  res = InvokeEigenBinaryOperation(p_eigen_mul, lhs, num_samples, rhs);
+
+  for (int i = 0; i < num_samples * len_x; ++i) {
+    ASSERT_NEAR(res[i], lhs[i] * rhs[i], 1e-5);
+  }
+}
+
+TEST_F(TestFunctionPointer, testEigenDivByFunctionPointer) {
+  res = InvokeEigenBinaryOperation(p_eigen_div, lhs, num_samples, rhs);
 
   for (int i = 0; i < num_samples * len_x; ++i) {
     ASSERT_NEAR(res[i], lhs[i] / rhs[i], 1e-5);
