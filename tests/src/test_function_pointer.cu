@@ -24,14 +24,14 @@
 #include "thrust/device_vector.h"
 #include "thrust/host_vector.h"
 
-using BinaryOperation = void (*)(uint, double const*, double const*, double*);
+using BinaryOperation = void (*)(uint, float const*, float const*, float*);
 
-#define MAKE_BINARY_OP(name, op)                                       \
-  __device__ void name(uint len, double const* lhs, double const* rhs, \
-                       double* res) {                                  \
-    for (uint i = 0; i < len; ++i) {                                   \
-      res[i] = lhs[i] op rhs[i];                                       \
-    }                                                                  \
+#define MAKE_BINARY_OP(name, op)                                     \
+  __device__ void name(uint len, float const* lhs, float const* rhs, \
+                       float* res) {                                 \
+    for (uint i = 0; i < len; ++i) {                                 \
+      res[i] = lhs[i] op rhs[i];                                     \
+    }                                                                \
   }
 
 MAKE_BINARY_OP(Add, +);
@@ -46,29 +46,29 @@ __device__ BinaryOperation p_mul = Mul;
 __device__ BinaryOperation p_div = Div;
 
 __global__ void BinaryOperationKernel(BinaryOperation op, uint num_samples,
-                                      uint len_x, double* lhs, double* rhs,
-                                      double* res) {
+                                      uint len_x, float* lhs, float* rhs,
+                                      float* res) {
   ulong i = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (i >= num_samples) {
     return;
   }
-  double* ith_lhs = lhs + i * len_x;
-  double* ith_rhs = rhs + i * len_x;
-  double* ith_res = res + i * len_x;
+  float* ith_lhs = lhs + i * len_x;
+  float* ith_rhs = rhs + i * len_x;
+  float* ith_res = res + i * len_x;
   (*op)(len_x, ith_lhs, ith_rhs, ith_res);
 }
 
-thrust::host_vector<double> InvokeBinaryOperation(
-    const BinaryOperation& op, const thrust::host_vector<double>& lhs,
-    uint num_samples, const thrust::host_vector<double>& rhs) {
+thrust::host_vector<float> InvokeBinaryOperation(
+    const BinaryOperation& op, const thrust::host_vector<float>& lhs,
+    uint num_samples, const thrust::host_vector<float>& rhs) {
   BinaryOperation p_op;
   cudaMemcpyFromSymbol(&p_op, op, sizeof(BinaryOperation));
 
-  thrust::device_vector<double> d_lhs(lhs.cbegin(), lhs.cend());
-  thrust::device_vector<double> d_rhs(rhs.cbegin(), rhs.cend());
+  thrust::device_vector<float> d_lhs(lhs.cbegin(), lhs.cend());
+  thrust::device_vector<float> d_rhs(rhs.cbegin(), rhs.cend());
 
-  thrust::device_vector<double> d_res(lhs.size());
+  thrust::device_vector<float> d_res(lhs.size());
   const uint threads_per_block = 16;
   const uint num_blocks =
       (num_samples + threads_per_block - 1) / threads_per_block;
@@ -87,12 +87,12 @@ struct TestFunctionPointer : public testing::Test {
 
   std::random_device dev;
   std::mt19937 rng{dev()};
-  std::uniform_real_distribution<> dist{10.0, 100.0};
-  double Generate() { return dist(rng); }
+  std::uniform_real_distribution<float> dist{10.0, 100.0};
+  float Generate() { return dist(rng); }
 
-  thrust::host_vector<double> lhs;
-  thrust::host_vector<double> rhs;
-  thrust::host_vector<double> res;
+  thrust::host_vector<float> lhs;
+  thrust::host_vector<float> rhs;
+  thrust::host_vector<float> res;
 
   TestFunctionPointer() : lhs(num_samples * len_x), rhs(num_samples * len_x) {
     thrust::generate(lhs.begin(), lhs.end(), [this] { return Generate(); });
